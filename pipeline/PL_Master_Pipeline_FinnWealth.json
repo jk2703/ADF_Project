@@ -1,0 +1,49 @@
+{
+	"name": "PL_Master_Pipeline_FinnWealth",
+	"properties": {
+		"activities": [
+			{
+				"name": "PL_Ingest_FinnWealth",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_ingest_Finnwealth_AllSources",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "PL_Transform_stg_to_DWH",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "PL_Ingest_FinnWealth",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Transform_stg_to_DWH",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2026-05-25T08:46:55Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

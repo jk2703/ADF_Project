@@ -1,0 +1,47 @@
+{
+	"name": "DS_SQL_FinnWealth_Holdings_stg",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "DS_SQL"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "AccountID",
+				"type": "varchar"
+			},
+			{
+				"name": "SecurityID",
+				"type": "varchar"
+			},
+			{
+				"name": "Quantity",
+				"type": "varchar"
+			},
+			{
+				"name": "ValuationDate",
+				"type": "varchar"
+			},
+			{
+				"name": "MarketValue",
+				"type": "varchar"
+			},
+			{
+				"name": "stg_load_timestamp",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			}
+		],
+		"typeProperties": {
+			"schema": "stg",
+			"table": "stg_holdings"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

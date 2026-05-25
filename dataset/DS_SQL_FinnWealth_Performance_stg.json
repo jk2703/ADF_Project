@@ -1,0 +1,55 @@
+{
+	"name": "DS_SQL_FinnWealth_Performance_stg",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "DS_SQL"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "AccountID",
+				"type": "varchar"
+			},
+			{
+				"name": "MonthStart",
+				"type": "varchar"
+			},
+			{
+				"name": "ReturnPct",
+				"type": "varchar"
+			},
+			{
+				"name": "BenchmarkCode",
+				"type": "varchar"
+			},
+			{
+				"name": "BenchmarkReturnPct",
+				"type": "varchar"
+			},
+			{
+				"name": "ExcessReturnPct",
+				"type": "varchar"
+			},
+			{
+				"name": "CumulativeReturnPct",
+				"type": "varchar"
+			},
+			{
+				"name": "stg_load_timestamp",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			}
+		],
+		"typeProperties": {
+			"schema": "stg",
+			"table": "stg_performance"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

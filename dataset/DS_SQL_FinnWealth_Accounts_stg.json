@@ -1,0 +1,51 @@
+{
+	"name": "DS_SQL_FinnWealth_Accounts_stg",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "DS_SQL"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "AccountID",
+				"type": "varchar"
+			},
+			{
+				"name": "ClientID",
+				"type": "varchar"
+			},
+			{
+				"name": "AccountType",
+				"type": "varchar"
+			},
+			{
+				"name": "OpenDate",
+				"type": "varchar"
+			},
+			{
+				"name": "BaseCurrency",
+				"type": "varchar"
+			},
+			{
+				"name": "Status",
+				"type": "varchar"
+			},
+			{
+				"name": "stg_load_timestamp",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			}
+		],
+		"typeProperties": {
+			"schema": "stg",
+			"table": "stg_accounts"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

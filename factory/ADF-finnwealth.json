@@ -1,0 +1,15 @@
+{
+	"name": "ADF-finnwealth",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Enabled",
+			"editable": true
+		}
+	},
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "609bb250-5f79-40c9-998d-9ef0d4b646af",
+		"tenantId": "98eb5a88-fa85-42ed-bd66-998acb01a148"
+	}
+}

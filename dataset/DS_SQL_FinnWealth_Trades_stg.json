@@ -1,0 +1,63 @@
+{
+	"name": "DS_SQL_FinnWealth_Trades_stg",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "DS_SQL"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "TradeID",
+				"type": "varchar"
+			},
+			{
+				"name": "AccountID",
+				"type": "varchar"
+			},
+			{
+				"name": "SecurityID",
+				"type": "varchar"
+			},
+			{
+				"name": "TradeDate",
+				"type": "varchar"
+			},
+			{
+				"name": "SettleDate",
+				"type": "varchar"
+			},
+			{
+				"name": "Side",
+				"type": "varchar"
+			},
+			{
+				"name": "Price",
+				"type": "varchar"
+			},
+			{
+				"name": "Quantity",
+				"type": "varchar"
+			},
+			{
+				"name": "Amount",
+				"type": "varchar"
+			},
+			{
+				"name": "stg_load_timestamp",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			}
+		],
+		"typeProperties": {
+			"schema": "stg",
+			"table": "stg_trades"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

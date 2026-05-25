@@ -1,0 +1,434 @@
+{
+	"name": "PL_Transform_stg_to_DWH",
+	"properties": {
+		"activities": [
+			{
+				"name": "Sp_Load_Dim_Advisor",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_dim_advisor]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Dim_Benchmark",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Advisor",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_dim_benchmark]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Dim_Securities",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Benchmark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_dim_security]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Dim_Clients",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Securities",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_dim_client]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Dim_Accounts",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Clients",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_dim_account]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Fact_Performance",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Accounts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_fact_performance]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Fact_SecurityPrice",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Accounts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_fact_security_price]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Fact_Fees",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Accounts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_fact_fee]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Fact_CashFlow",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Accounts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_fact_cashflow]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Fact_Trade",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Accounts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_fact_trade]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Sp_Load_Fact_Holdings",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Dim_Accounts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dwh].[usp_load_fact_holding]"
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "On_Success",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Fact_Performance",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_SecurityPrice",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_Fees",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_CashFlow",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_Trade",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_Holdings",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_log_transform_summary]",
+					"storedProcedureParameters": {
+						"status": {
+							"value": "Success",
+							"type": "String"
+						},
+						"error_message": {
+							"value": "Error",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "On_Failure",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Sp_Load_Fact_Performance",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_SecurityPrice",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_Fees",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_CashFlow",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_Trade",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "Sp_Load_Fact_Holdings",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_log_transform_summary]",
+					"storedProcedureParameters": {
+						"status": {
+							"value": "Failure",
+							"type": "String"
+						},
+						"error_message": {
+							"value": "error",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2026-05-25T08:30:29Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
