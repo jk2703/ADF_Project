@@ -1,0 +1,1433 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "ADF-finnwealth"
+		},
+		"LS_Azure_BlobStorage_FinnWealth_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'LS_Azure_BlobStorage_FinnWealth'"
+		},
+		"LS_Azure_SQLdatabase_FinnWealth_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'LS_Azure_SQLdatabase_FinnWealth'"
+		},
+		"LS_Azure_SQLdatabase_FinnWealth_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "sqlserverfinnwealth.database.windows.net"
+		},
+		"LS_Azure_SQLdatabase_FinnWealth_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "sqldbfinnwealth"
+		},
+		"LS_Azure_SQLdatabase_FinnWealth_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "sqladmin"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_Azure_BlobStorage_FinnWealth')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": "[parameters('LS_Azure_BlobStorage_FinnWealth_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_Azure_SQLdatabase_FinnWealth')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('LS_Azure_SQLdatabase_FinnWealth_properties_typeProperties_server')]",
+					"database": "[parameters('LS_Azure_SQLdatabase_FinnWealth_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('LS_Azure_SQLdatabase_FinnWealth_properties_typeProperties_userName')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('LS_Azure_SQLdatabase_FinnWealth_password')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_Transform_stg_to_DWH')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Sp_Load_Dim_Advisor",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_dim_advisor]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Dim_Benchmark",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Advisor",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_dim_benchmark]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Dim_Securities",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Benchmark",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_dim_security]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Dim_Clients",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Securities",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_dim_client]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Dim_Accounts",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Clients",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_dim_account]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Fact_Performance",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Accounts",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_fact_performance]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Fact_SecurityPrice",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Accounts",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_fact_security_price]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Fact_Fees",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Accounts",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_fact_fee]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Fact_CashFlow",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Accounts",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_fact_cashflow]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Fact_Trade",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Accounts",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_fact_trade]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Sp_Load_Fact_Holdings",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Dim_Accounts",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dwh].[usp_load_fact_holding]"
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "On_Success",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Fact_Performance",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_SecurityPrice",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_Fees",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_CashFlow",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_Trade",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_Holdings",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[usp_log_transform_summary]",
+							"storedProcedureParameters": {
+								"status": {
+									"value": "Success",
+									"type": "String"
+								},
+								"error_message": {
+									"value": "Error",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "On_Failure",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Sp_Load_Fact_Performance",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_SecurityPrice",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_Fees",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_CashFlow",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_Trade",
+								"dependencyConditions": [
+									"Failed"
+								]
+							},
+							{
+								"activity": "Sp_Load_Fact_Holdings",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:30:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[usp_log_transform_summary]",
+							"storedProcedureParameters": {
+								"status": {
+									"value": "Failure",
+									"type": "String"
+								},
+								"error_message": {
+									"value": "error",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2026-05-25T08:30:29Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Accounts_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "AccountID",
+						"type": "varchar"
+					},
+					{
+						"name": "ClientID",
+						"type": "varchar"
+					},
+					{
+						"name": "AccountType",
+						"type": "varchar"
+					},
+					{
+						"name": "OpenDate",
+						"type": "varchar"
+					},
+					{
+						"name": "BaseCurrency",
+						"type": "varchar"
+					},
+					{
+						"name": "Status",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_accounts"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Advisors_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "AdvisorID",
+						"type": "varchar"
+					},
+					{
+						"name": "AdvisorName",
+						"type": "varchar"
+					},
+					{
+						"name": "Region",
+						"type": "varchar"
+					},
+					{
+						"name": "JoinDate",
+						"type": "varchar"
+					},
+					{
+						"name": "ExperienceYears",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_advisors"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Benchmarks_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "BenchmarkCode",
+						"type": "varchar"
+					},
+					{
+						"name": "Description",
+						"type": "varchar"
+					},
+					{
+						"name": "Currency",
+						"type": "varchar"
+					},
+					{
+						"name": "IndexValueDate",
+						"type": "varchar"
+					},
+					{
+						"name": "IndexValue",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_benchmarks"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Cashflows_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "CashflowID",
+						"type": "varchar"
+					},
+					{
+						"name": "AccountID",
+						"type": "varchar"
+					},
+					{
+						"name": "CashflowDate",
+						"type": "varchar"
+					},
+					{
+						"name": "Type",
+						"type": "varchar"
+					},
+					{
+						"name": "Amount",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_cashflows"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Clients_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "ClientID",
+						"type": "varchar"
+					},
+					{
+						"name": "ClientName",
+						"type": "varchar"
+					},
+					{
+						"name": "Segment",
+						"type": "varchar"
+					},
+					{
+						"name": "RiskProfile",
+						"type": "varchar"
+					},
+					{
+						"name": "PrimaryAdvisorID",
+						"type": "varchar"
+					},
+					{
+						"name": "ClientSince",
+						"type": "varchar"
+					},
+					{
+						"name": "Country",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_clients"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Fees_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "FeeID",
+						"type": "varchar"
+					},
+					{
+						"name": "AccountID",
+						"type": "varchar"
+					},
+					{
+						"name": "FeeDate",
+						"type": "varchar"
+					},
+					{
+						"name": "FeeType",
+						"type": "varchar"
+					},
+					{
+						"name": "Amount",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_fees"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Holdings_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "AccountID",
+						"type": "varchar"
+					},
+					{
+						"name": "SecurityID",
+						"type": "varchar"
+					},
+					{
+						"name": "Quantity",
+						"type": "varchar"
+					},
+					{
+						"name": "ValuationDate",
+						"type": "varchar"
+					},
+					{
+						"name": "MarketValue",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_holdings"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Performance_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "AccountID",
+						"type": "varchar"
+					},
+					{
+						"name": "MonthStart",
+						"type": "varchar"
+					},
+					{
+						"name": "ReturnPct",
+						"type": "varchar"
+					},
+					{
+						"name": "BenchmarkCode",
+						"type": "varchar"
+					},
+					{
+						"name": "BenchmarkReturnPct",
+						"type": "varchar"
+					},
+					{
+						"name": "ExcessReturnPct",
+						"type": "varchar"
+					},
+					{
+						"name": "CumulativeReturnPct",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_performance"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Prices_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SecurityID",
+						"type": "varchar"
+					},
+					{
+						"name": "PriceDate",
+						"type": "varchar"
+					},
+					{
+						"name": "ClosePrice",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_prices"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Securities')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "SecurityID",
+						"type": "varchar"
+					},
+					{
+						"name": "Ticker",
+						"type": "varchar"
+					},
+					{
+						"name": "SecurityName",
+						"type": "varchar"
+					},
+					{
+						"name": "AssetClass",
+						"type": "varchar"
+					},
+					{
+						"name": "Sector",
+						"type": "varchar"
+					},
+					{
+						"name": "Currency",
+						"type": "varchar"
+					},
+					{
+						"name": "Region",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_securities"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_SQL_FinnWealth_Trades_stg')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_SQLdatabase_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_SQL"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "TradeID",
+						"type": "varchar"
+					},
+					{
+						"name": "AccountID",
+						"type": "varchar"
+					},
+					{
+						"name": "SecurityID",
+						"type": "varchar"
+					},
+					{
+						"name": "TradeDate",
+						"type": "varchar"
+					},
+					{
+						"name": "SettleDate",
+						"type": "varchar"
+					},
+					{
+						"name": "Side",
+						"type": "varchar"
+					},
+					{
+						"name": "Price",
+						"type": "varchar"
+					},
+					{
+						"name": "Quantity",
+						"type": "varchar"
+					},
+					{
+						"name": "Amount",
+						"type": "varchar"
+					},
+					{
+						"name": "stg_load_timestamp",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "stg",
+					"table": "stg_trades"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_SQLdatabase_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Ds_FinnWealth_Accounts')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_BlobStorage_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_csv"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Accounts.csv",
+						"container": "raw-data"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "AccountID",
+						"type": "String"
+					},
+					{
+						"name": "ClientID",
+						"type": "String"
+					},
+					{
+						"name": "AccountType",
+						"type": "String"
+					},
+					{
+						"name": "OpenDate",
+						"type": "String"
+					},
+					{
+						"name": "BaseCurrency",
+						"type": "String"
+					},
+					{
+						"name": "Status",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_BlobStorage_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Ds_FinnWealth_Advisors')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_BlobStorage_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_csv"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Advisors.csv",
+						"container": "raw-data"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "AdvisorID",
+						"type": "String"
+					},
+					{
+						"name": "AdvisorName",
+						"type": "String"
+					},
+					{
+						"name": "Region",
+						"type": "String"
+					},
+					{
+						"name": "JoinDate",
+						"type": "String"
+					},
+					{
+						"name": "ExperienceYears",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_BlobStorage_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Ds_FinnWealth_Benchmarks')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_BlobStorage_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_csv"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Benchmarks.csv",
+						"container": "raw-data"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "BenchmarkCode",
+						"type": "String"
+					},
+					{
+						"name": "Description",
+						"type": "String"
+					},
+					{
+						"name": "Currency",
+						"type": "String"
+					},
+					{
+						"name": "IndexValueDate",
+						"type": "String"
+					},
+					{
+						"name": "IndexValue",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_BlobStorage_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Ds_FinnWealth_Cashflows')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_BlobStorage_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_csv"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Cashflows.csv",
+						"container": "raw-data"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "CashflowID",
+						"type": "String"
+					},
+					{
+						"name": "AccountID",
+						"type": "String"
+					},
+					{
+						"name": "CashflowDate",
+						"type": "String"
+					},
+					{
+						"name": "Type",
+						"type": "String"
+					},
+					{
+						"name": "Amount",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_BlobStorage_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Ds_FinnWealth_Clients')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_BlobStorage_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_csv"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Clients.csv",
+						"container": "raw-data"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "ClientID",
+						"type": "String"
+					},
+					{
+						"name": "ClientName",
+						"type": "String"
+					},
+					{
+						"name": "Segment",
+						"type": "String"
+					},
+					{
+						"name": "RiskProfile",
+						"type": "String"
+					},
+					{
+						"name": "PrimaryAdvisorID",
+						"type": "String"
+					},
+					{
+						"name": "ClientSince",
+						"type": "String"
+					},
+					{
+						"name": "Country",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_BlobStorage_FinnWealth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Ds_FinnWealth_Fees')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_Azure_BlobStorage_FinnWealth",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "DS_csv"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Fees.csv",
+						"container": "raw-data"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "FeeID",
+						"type": "String"
+					},
+					{
+						"name": "AccountID",
+						"type": "String"
+					},
+					{
+						"name": "FeeDate",
+						"type": "String"
+					},
+					{
+						"name": "FeeType",
+						"type": "String"
+					},
+					{
+						"name": "Amount",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_Azure_BlobStorage_FinnWealth')]"
+			]
+		}
+	]
+}
