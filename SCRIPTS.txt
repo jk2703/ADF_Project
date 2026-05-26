@@ -1,0 +1,1041 @@
+--Truncate Table Queries
+TRUNCATE TABLE stg.stg_advisors;
+TRUNCATE TABLE stg.stg_clients;
+TRUNCATE TABLE stg.stg_accounts;
+TRUNCATE TABLE stg.stg_securities;
+TRUNCATE TABLE stg.stg_benchmarks;
+TRUNCATE TABLE stg.stg_cashflows;
+TRUNCATE TABLE stg.stg_fees;
+TRUNCATE TABLE stg.stg_holdings;
+TRUNCATE TABLE stg.stg_performance;
+TRUNCATE TABLE stg.stg_prices;
+TRUNCATE TABLE stg.stg_trades;
+
+--Stored Procedures
+CREATE PROCEDURE dbo.usp_log_ingest_summary
+    @status         VARCHAR(20),
+    @error_message  VARCHAR(2000)
+AS
+BEGIN
+    INSERT INTO dbo.audit_pipeline_log (
+        pipeline_name,
+        source_file,
+        target_table,
+        run_start_time,
+        run_end_time,
+        rows_loaded,
+        status,
+        error_message
+    )
+    VALUES (
+        'pl_ingest_all_csv_to_stg',
+        'ALL_CSV_FILES',
+        'ALL_STG_TABLES',
+        GETDATE(),
+        GETDATE(),
+        NULL,
+        @status,
+        @error_message
+    );
+END;
+
+
+
+
+verifications.........................
+-- Check audit log
+SELECT * FROM dbo.audit_pipeline_log;
+
+-- Check all staging row counts
+SELECT 'stg_advisors'   , COUNT(*) FROM stg.stg_advisors   UNION ALL
+SELECT 'stg_clients'    , COUNT(*) FROM stg.stg_clients     UNION ALL
+SELECT 'stg_accounts'   , COUNT(*) FROM stg.stg_accounts    UNION ALL
+SELECT 'stg_securities' , COUNT(*) FROM stg.stg_securities  UNION ALL
+SELECT 'stg_benchmarks' , COUNT(*) FROM stg.stg_benchmarks  UNION ALL
+SELECT 'stg_cashflows'  , COUNT(*) FROM stg.stg_cashflows   UNION ALL
+SELECT 'stg_fees'       , COUNT(*) FROM stg.stg_fees        UNION ALL
+SELECT 'stg_holdings'   , COUNT(*) FROM stg.stg_holdings    UNION ALL
+SELECT 'stg_performance', COUNT(*) FROM stg.stg_performance UNION ALL
+SELECT 'stg_prices'     , COUNT(*) FROM stg.stg_prices      UNION ALL
+SELECT 'stg_trades'     , COUNT(*) FROM stg.stg_trades;
+
+
+SELECT * FROM dbo.audit_pipeline_log;
+
+
+
+SP-1
+CREATE PROCEDURE dwh.usp_load_dim_advisor
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- UPDATE existing records if anything changed (SCD Type 1 - overwrite)
+    UPDATE dwh.dim_advisor
+    SET
+        advisor_name        = src.AdvisorName,
+        region              = src.Region,
+        join_date           = CAST(src.JoinDate AS DATE),
+        experience_years    = CAST(src.ExperienceYears AS INT),
+        dwh_updated_date    = GETDATE()
+    FROM dwh.dim_advisor tgt
+    INNER JOIN stg.stg_advisors src
+        ON tgt.advisor_id = src.AdvisorID
+    WHERE
+        tgt.advisor_name        != src.AdvisorName OR
+        tgt.region              != src.Region OR
+        tgt.experience_years    != CAST(src.ExperienceYears AS INT);
+
+    -- INSERT new records that don't exist yet
+    INSERT INTO dwh.dim_advisor (
+        advisor_id,
+        advisor_name,
+        region,
+        join_date,
+        experience_years,
+        dwh_created_date,
+        dwh_updated_date,
+        is_active
+    )
+    SELECT
+        src.AdvisorID,
+        src.AdvisorName,
+        src.Region,
+        CAST(src.JoinDate AS DATE),
+        CAST(src.ExperienceYears AS INT),
+        GETDATE(),
+        GETDATE(),
+        'Y'
+    FROM stg.stg_advisors src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_advisor tgt
+        WHERE tgt.advisor_id = src.AdvisorID
+    );
+
+END;
+
+Sp-2
+CREATE PROCEDURE dwh.usp_load_dim_benchmark
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- UPDATE existing records if anything changed (SCD Type 1 - overwrite)
+    UPDATE dwh.dim_benchmark
+    SET
+        description         = src.Description,
+        currency            = src.Currency,
+        dwh_updated_date    = GETDATE()
+    FROM dwh.dim_benchmark tgt
+    INNER JOIN stg.stg_benchmarks src
+        ON tgt.benchmark_code = src.BenchmarkCode
+    WHERE
+        tgt.description != src.Description OR
+        tgt.currency    != src.Currency;
+
+    -- INSERT new records that don't exist yet
+    INSERT INTO dwh.dim_benchmark (
+        benchmark_code,
+        description,
+        currency,
+        dwh_created_date,
+        dwh_updated_date,
+        is_active
+    )
+    SELECT DISTINCT
+        src.BenchmarkCode,
+        src.Description,
+        src.Currency,
+        GETDATE(),
+        GETDATE(),
+        'Y'
+    FROM stg.stg_benchmarks src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_benchmark tgt
+        WHERE tgt.benchmark_code = src.BenchmarkCode
+    );
+
+END;
+
+
+sp-3
+CREATE PROCEDURE dwh.usp_load_dim_security
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- UPDATE existing (SCD Type 1 - overwrite)
+    UPDATE dwh.dim_security
+    SET
+        ticker              = src.Ticker,
+        security_name       = src.SecurityName,
+        asset_class         = src.AssetClass,
+        sector              = ISNULL(NULLIF(src.Sector, ''), 'N/A'),
+        currency            = src.Currency,
+        region              = src.Region,
+        dwh_updated_date    = GETDATE()
+    FROM dwh.dim_security tgt
+    INNER JOIN stg.stg_securities src
+        ON tgt.security_id = src.SecurityID
+    WHERE
+        tgt.ticker          != src.Ticker OR
+        tgt.asset_class     != src.AssetClass OR
+        tgt.sector          != ISNULL(NULLIF(src.Sector, ''), 'N/A') OR
+        tgt.currency        != src.Currency OR
+        tgt.region          != src.Region;
+
+    -- INSERT new records
+    INSERT INTO dwh.dim_security (
+        security_id,
+        ticker,
+        security_name,
+        asset_class,
+        sector,
+        currency,
+        region,
+        dwh_created_date,
+        dwh_updated_date,
+        is_active
+    )
+    SELECT
+        src.SecurityID,
+        src.Ticker,
+        src.SecurityName,
+        src.AssetClass,
+        ISNULL(NULLIF(src.Sector, ''), 'N/A'),
+        src.Currency,
+        src.Region,
+        GETDATE(),
+        GETDATE(),
+        'Y'
+    FROM stg.stg_securities src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_security tgt
+        WHERE tgt.security_id = src.SecurityID
+    );
+
+END;
+
+sp-4
+CREATE PROCEDURE dwh.usp_load_dim_client
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- EXPIRE old records where data has changed (SCD Type 2)
+    UPDATE dwh.dim_client
+    SET
+        effective_end_date  = CAST(GETDATE() AS DATE),
+        is_current          = 'N',
+        dwh_updated_date    = GETDATE()
+    FROM dwh.dim_client tgt
+    INNER JOIN stg.stg_clients src
+        ON tgt.client_id = src.ClientID
+        AND tgt.is_current = 'Y'
+    WHERE
+        tgt.segment             != src.Segment OR
+        tgt.risk_profile        != ISNULL(NULLIF(src.RiskProfile, ''), 'Unknown') OR
+        tgt.country             != src.Country OR
+        tgt.primary_advisor_id  != src.PrimaryAdvisorID;
+
+    -- INSERT new version for changed records
+    INSERT INTO dwh.dim_client (
+        client_id,
+        client_name,
+        segment,
+        risk_profile,
+        primary_advisor_id,
+        client_since,
+        country,
+        effective_start_date,
+        effective_end_date,
+        is_current,
+        dwh_created_date,
+        dwh_updated_date
+    )
+    SELECT
+        src.ClientID,
+        src.ClientName,
+        src.Segment,
+        ISNULL(NULLIF(src.RiskProfile, ''), 'Unknown'),
+        src.PrimaryAdvisorID,
+        CAST(src.ClientSince AS DATE),
+        src.Country,
+        CAST(GETDATE() AS DATE),
+        NULL,
+        'Y',
+        GETDATE(),
+        GETDATE()
+    FROM stg.stg_clients src
+    INNER JOIN dwh.dim_client tgt
+        ON tgt.client_id = src.ClientID
+        AND tgt.is_current = 'N'
+        AND tgt.effective_end_date = CAST(GETDATE() AS DATE)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_client cur
+        WHERE cur.client_id = src.ClientID
+        AND cur.is_current = 'Y'
+    );
+
+    -- INSERT brand new clients
+    INSERT INTO dwh.dim_client (
+        client_id,
+        client_name,
+        segment,
+        risk_profile,
+        primary_advisor_id,
+        client_since,
+        country,
+        effective_start_date,
+        effective_end_date,
+        is_current,
+        dwh_created_date,
+        dwh_updated_date
+    )
+    SELECT
+        src.ClientID,
+        src.ClientName,
+        src.Segment,
+        ISNULL(NULLIF(src.RiskProfile, ''), 'Unknown'),
+        src.PrimaryAdvisorID,
+        CAST(src.ClientSince AS DATE),
+        src.Country,
+        CAST(GETDATE() AS DATE),
+        NULL,
+        'Y',
+        GETDATE(),
+        GETDATE()
+    FROM stg.stg_clients src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_client tgt
+        WHERE tgt.client_id = src.ClientID
+    );
+
+END;
+
+
+sp-5
+CREATE PROCEDURE dwh.usp_load_dim_account
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- EXPIRE old records where data has changed (SCD Type 2)
+    UPDATE dwh.dim_account
+    SET
+        effective_end_date  = CAST(GETDATE() AS DATE),
+        is_current          = 'N',
+        dwh_updated_date    = GETDATE()
+    FROM dwh.dim_account tgt
+    INNER JOIN stg.stg_accounts src
+        ON tgt.account_id = src.AccountID
+        AND tgt.is_current = 'Y'
+    WHERE
+        tgt.status          != src.Status OR
+        tgt.account_type    != src.AccountType OR
+        tgt.base_currency   != src.BaseCurrency;
+
+    -- INSERT new version for changed records
+    INSERT INTO dwh.dim_account (
+        account_id,
+        client_id,
+        account_type,
+        open_date,
+        base_currency,
+        status,
+        effective_start_date,
+        effective_end_date,
+        is_current,
+        dwh_created_date,
+        dwh_updated_date
+    )
+    SELECT
+        src.AccountID,
+        src.ClientID,
+        src.AccountType,
+        CAST(src.OpenDate AS DATE),
+        src.BaseCurrency,
+        src.Status,
+        CAST(GETDATE() AS DATE),
+        NULL,
+        'Y',
+        GETDATE(),
+        GETDATE()
+    FROM stg.stg_accounts src
+    INNER JOIN dwh.dim_account tgt
+        ON tgt.account_id = src.AccountID
+        AND tgt.is_current = 'N'
+        AND tgt.effective_end_date = CAST(GETDATE() AS DATE)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_account cur
+        WHERE cur.account_id = src.AccountID
+        AND cur.is_current = 'Y'
+    );
+
+    -- INSERT brand new accounts
+    INSERT INTO dwh.dim_account (
+        account_id,
+        client_id,
+        account_type,
+        open_date,
+        base_currency,
+        status,
+        effective_start_date,
+        effective_end_date,
+        is_current,
+        dwh_created_date,
+        dwh_updated_date
+    )
+    SELECT
+        src.AccountID,
+        src.ClientID,
+        src.AccountType,
+        CAST(src.OpenDate AS DATE),
+        src.BaseCurrency,
+        src.Status,
+        CAST(GETDATE() AS DATE),
+        NULL,
+        'Y',
+        GETDATE(),
+        GETDATE()
+    FROM stg.stg_accounts src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_account tgt
+        WHERE tgt.account_id = src.AccountID
+    );
+
+END;
+
+
+sp-6
+CREATE PROCEDURE dwh.usp_load_fact_holding
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- TRUNCATE fact table before reload (full refresh)
+    TRUNCATE TABLE dwh.fact_holding;
+
+    INSERT INTO dwh.fact_holding (
+        account_sk,
+        security_sk,
+        date_sk,
+        account_id,
+        security_id,
+        valuation_date,
+        quantity,
+        market_value
+    )
+    SELECT
+        da.account_sk,
+        ds.security_sk,
+        dd.date_sk,
+        src.AccountID,
+        src.SecurityID,
+        CAST(src.ValuationDate AS DATE),
+        CAST(src.Quantity AS DECIMAL(18,4)),
+        CAST(src.MarketValue AS DECIMAL(18,2))
+    FROM stg.stg_holdings src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_security ds
+        ON ds.security_id = src.SecurityID
+        AND ds.is_active = 'Y'
+    INNER JOIN dwh.dim_date dd
+        ON dd.full_date = CAST(src.ValuationDate AS DATE);
+
+END;
+
+
+sp-7
+CREATE PROCEDURE dwh.usp_load_fact_trade
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_trade;
+
+    INSERT INTO dwh.fact_trade (
+        account_sk,
+        security_sk,
+        trade_date_sk,
+        settle_date_sk,
+        trade_id,
+        account_id,
+        security_id,
+        trade_date,
+        settle_date,
+        side,
+        price,
+        quantity,
+        amount,
+        settle_lag_days
+    )
+    SELECT
+        da.account_sk,
+        ds.security_sk,
+        dd_trade.date_sk,
+        dd_settle.date_sk,
+        src.TradeID,
+        src.AccountID,
+        src.SecurityID,
+        CAST(src.TradeDate AS DATE),
+        CAST(src.SettleDate AS DATE),
+        src.Side,
+        CAST(src.Price AS DECIMAL(18,4)),
+        CAST(src.Quantity AS DECIMAL(18,4)),
+        CAST(src.Amount AS DECIMAL(18,2)),
+        DATEDIFF(DAY,
+            CAST(src.TradeDate AS DATE),
+            CAST(src.SettleDate AS DATE))
+    FROM stg.stg_trades src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_security ds
+        ON ds.security_id = src.SecurityID
+        AND ds.is_active = 'Y'
+    INNER JOIN dwh.dim_date dd_trade
+        ON dd_trade.full_date = CAST(src.TradeDate AS DATE)
+    INNER JOIN dwh.dim_date dd_settle
+        ON dd_settle.full_date = CAST(src.SettleDate AS DATE);
+
+END;
+
+
+sp-8
+CREATE PROCEDURE dwh.usp_load_fact_cashflow
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_cashflow;
+
+    INSERT INTO dwh.fact_cashflow (
+        account_sk,
+        date_sk,
+        cashflow_id,
+        account_id,
+        cashflow_date,
+        cashflow_type,
+        amount,
+        is_inflow
+    )
+    SELECT
+        da.account_sk,
+        dd.date_sk,
+        src.CashflowID,
+        src.AccountID,
+        CAST(src.CashflowDate AS DATE),
+        src.Type,
+        CAST(src.Amount AS DECIMAL(18,2)),
+        CASE WHEN CAST(src.Amount AS DECIMAL(18,2)) > 0
+             THEN 'Y' ELSE 'N' END
+    FROM stg.stg_cashflows src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_date dd
+        ON dd.full_date = CAST(src.CashflowDate AS DATE);
+
+END;
+
+sp-9
+CREATE PROCEDURE dwh.usp_load_fact_fee
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_fee;
+
+    INSERT INTO dwh.fact_fee (
+        account_sk,
+        date_sk,
+        fee_id,
+        account_id,
+        fee_date,
+        fee_type,
+        amount
+    )
+    SELECT
+        da.account_sk,
+        dd.date_sk,
+        src.FeeID,
+        src.AccountID,
+        CAST(src.FeeDate AS DATE),
+        src.FeeType,
+        CAST(src.Amount AS DECIMAL(18,2))
+    FROM stg.stg_fees src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_date dd
+        ON dd.full_date = CAST(src.FeeDate AS DATE);
+
+END;
+
+sp-10
+CREATE PROCEDURE dwh.usp_load_fact_security_price
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_security_price;
+
+    INSERT INTO dwh.fact_security_price (
+        security_sk,
+        date_sk,
+        security_id,
+        price_date,
+        close_price
+    )
+    SELECT
+        ds.security_sk,
+        dd.date_sk,
+        src.SecurityID,
+        CAST(src.PriceDate AS DATE),
+        CASE WHEN src.ClosePrice = '' OR src.ClosePrice IS NULL
+             THEN NULL
+             ELSE CAST(src.ClosePrice AS DECIMAL(18,4)) END
+    FROM stg.stg_prices src
+    INNER JOIN dwh.dim_security ds
+        ON ds.security_id = src.SecurityID
+        AND ds.is_active = 'Y'
+    INNER JOIN dwh.dim_date dd
+        ON dd.full_date = CAST(src.PriceDate AS DATE);
+
+END;
+
+sp-11
+CREATE PROCEDURE dwh.usp_load_fact_performance
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_performance;
+
+    INSERT INTO dwh.fact_performance (
+        account_sk,
+        benchmark_sk,
+        date_sk,
+        account_id,
+        benchmark_code,
+        month_start,
+        return_pct,
+        benchmark_return_pct,
+        excess_return_pct,
+        cumulative_return_pct
+    )
+    SELECT
+        da.account_sk,
+        db.benchmark_sk,
+        dd.date_sk,
+        src.AccountID,
+        src.BenchmarkCode,
+        CAST(src.MonthStart AS DATE),
+        CASE WHEN src.ReturnPct = '' OR src.ReturnPct IS NULL
+             THEN NULL
+             ELSE CAST(src.ReturnPct AS DECIMAL(10,6)) END,
+        CAST(src.BenchmarkReturnPct AS DECIMAL(10,6)),
+        CAST(src.ExcessReturnPct AS DECIMAL(10,6)),
+        CAST(src.CumulativeReturnPct AS DECIMAL(10,6))
+    FROM stg.stg_performance src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_benchmark db
+        ON db.benchmark_code = src.BenchmarkCode
+        AND db.is_active = 'Y'
+    INNER JOIN dwh.dim_date dd
+        ON dd.full_date = CAST(src.MonthStart AS DATE);
+
+END;
+
+
+
+
+
+
+modify existing procedure
+ALTER PROCEDURE dwh.usp_load_dim_advisor
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- UPDATE existing records (SCD Type 1)
+    UPDATE dwh.dim_advisor
+    SET
+        advisor_name        = src.AdvisorName,
+        region              = ISNULL(NULLIF(src.Region, ''), 'Unknown'),
+        join_date           = CAST(src.JoinDate AS DATE),
+        experience_years    = CAST(src.ExperienceYears AS INT),
+        dwh_updated_date    = GETDATE()
+    FROM dwh.dim_advisor tgt
+    INNER JOIN stg.stg_advisors src
+        ON tgt.advisor_id = src.AdvisorID
+    WHERE
+        tgt.advisor_name        != src.AdvisorName OR
+        tgt.region              != ISNULL(NULLIF(src.Region, ''), 'Unknown') OR
+        tgt.experience_years    != CAST(src.ExperienceYears AS INT);
+
+    -- INSERT new records
+    INSERT INTO dwh.dim_advisor (
+        advisor_id,
+        advisor_name,
+        region,
+        join_date,
+        experience_years,
+        dwh_created_date,
+        dwh_updated_date,
+        is_active
+    )
+    SELECT
+        src.AdvisorID,
+        src.AdvisorName,
+        ISNULL(NULLIF(src.Region, ''), 'Unknown'),
+        CAST(src.JoinDate AS DATE),
+        CAST(src.ExperienceYears AS INT),
+        GETDATE(),
+        GETDATE(),
+        'Y'
+    FROM stg.stg_advisors src
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dwh.dim_advisor tgt
+        WHERE tgt.advisor_id = src.AdvisorID
+    );
+
+END;
+
+--Check Status Procedure
+CREATE PROCEDURE dbo.usp_log_transform_summary
+    @status         VARCHAR(20),
+    @error_message  VARCHAR(2000)
+AS
+BEGIN
+    INSERT INTO dbo.audit_pipeline_log (
+        pipeline_name,
+        source_file,
+        target_table,
+        run_start_time,
+        run_end_time,
+        status,
+        error_message
+    )
+    VALUES (
+        'pl_transform_stg_to_dwh',
+        'ALL_STG_TABLES',
+        'ALL_DWH_TABLES',
+        GETDATE(),
+        GETDATE(),
+        @status,
+        @error_message
+    );
+END;
+
+--Verification Scripts
+SELECT
+    log_id,
+    pipeline_name,
+    source_file,
+    target_table,
+    run_start_time,
+    run_end_time,
+    status,
+    error_message
+FROM dbo.audit_pipeline_log
+ORDER BY log_id;
+
+
+SELECT 'stg_advisors'   , COUNT(*) FROM stg.stg_advisors   UNION ALL
+SELECT 'stg_clients'    , COUNT(*) FROM stg.stg_clients     UNION ALL
+SELECT 'stg_accounts'   , COUNT(*) FROM stg.stg_accounts    UNION ALL
+SELECT 'stg_securities' , COUNT(*) FROM stg.stg_securities  UNION ALL
+SELECT 'stg_benchmarks' , COUNT(*) FROM stg.stg_benchmarks  UNION ALL
+SELECT 'stg_cashflows'  , COUNT(*) FROM stg.stg_cashflows   UNION ALL
+SELECT 'stg_fees'       , COUNT(*) FROM stg.stg_fees        UNION ALL
+SELECT 'stg_holdings'   , COUNT(*) FROM stg.stg_holdings    UNION ALL
+SELECT 'stg_performance', COUNT(*) FROM stg.stg_performance UNION ALL
+SELECT 'stg_prices'     , COUNT(*) FROM stg.stg_prices      UNION ALL
+SELECT 'stg_trades'     , COUNT(*) FROM stg.stg_trades;
+
+SELECT 'dim_advisor'         , COUNT(*) FROM dwh.dim_advisor         UNION ALL
+SELECT 'dim_benchmark'       , COUNT(*) FROM dwh.dim_benchmark       UNION ALL
+SELECT 'dim_security'        , COUNT(*) FROM dwh.dim_security        UNION ALL
+SELECT 'dim_client'          , COUNT(*) FROM dwh.dim_client          UNION ALL
+SELECT 'dim_account'         , COUNT(*) FROM dwh.dim_account         UNION ALL
+SELECT 'fact_holding'        , COUNT(*) FROM dwh.fact_holding        UNION ALL
+SELECT 'fact_trade'          , COUNT(*) FROM dwh.fact_trade          UNION ALL
+SELECT 'fact_cashflow'       , COUNT(*) FROM dwh.fact_cashflow       UNION ALL
+SELECT 'fact_fee'            , COUNT(*) FROM dwh.fact_fee            UNION ALL
+SELECT 'fact_security_price' , COUNT(*) FROM dwh.fact_security_price UNION ALL
+SELECT 'fact_performance'    , COUNT(*) FROM dwh.fact_performance;
+
+
+-- Check for any NULLs in dimension key columns
+SELECT 'dim_advisor NULL region'    , COUNT(*) FROM dwh.dim_advisor   WHERE region = 'Unknown'
+UNION ALL
+SELECT 'dim_client NULL risk'       , COUNT(*) FROM dwh.dim_client    WHERE risk_profile = 'Unknown'
+UNION ALL
+SELECT 'dim_security NULL sector'   , COUNT(*) FROM dwh.dim_security  WHERE sector = 'N/A'
+UNION ALL
+-- Check SCD Type 2 current records
+SELECT 'dim_client current records' , COUNT(*) FROM dwh.dim_client    WHERE is_current = 'Y'
+UNION ALL
+SELECT 'dim_account current records', COUNT(*) FROM dwh.dim_account   WHERE is_current = 'Y';
+
+
+
+
+-- Check no orphan records in facts (surrogate key = 0 or NULL means lookup failed)
+SELECT 'fact_holding orphan accounts'  , COUNT(*) FROM dwh.fact_holding        WHERE account_sk  IS NULL
+UNION ALL
+SELECT 'fact_holding orphan securities', COUNT(*) FROM dwh.fact_holding        WHERE security_sk IS NULL
+UNION ALL
+SELECT 'fact_trade orphan accounts'    , COUNT(*) FROM dwh.fact_trade          WHERE account_sk  IS NULL
+UNION ALL
+SELECT 'fact_trade orphan securities'  , COUNT(*) FROM dwh.fact_trade          WHERE security_sk IS NULL
+UNION ALL
+SELECT 'fact_cashflow orphan accounts' , COUNT(*) FROM dwh.fact_cashflow       WHERE account_sk  IS NULL
+UNION ALL
+SELECT 'fact_fee orphan accounts'      , COUNT(*) FROM dwh.fact_fee            WHERE account_sk  IS NULL
+UNION ALL
+SELECT 'fact_price orphan securities'  , COUNT(*) FROM dwh.fact_security_price WHERE security_sk IS NULL
+UNION ALL
+SELECT 'fact_perf orphan accounts'     , COUNT(*) FROM dwh.fact_performance    WHERE account_sk  IS NULL
+UNION ALL
+SELECT 'fact_perf orphan benchmarks'   , COUNT(*) FROM dwh.fact_performance    WHERE benchmark_sk IS NULL;
+
+
+
+-- Cashflow sign check
+SELECT
+    cashflow_type,
+    COUNT(*)                                        AS total_rows,
+    SUM(CASE WHEN amount > 0 THEN 1 ELSE 0 END)    AS positive_count,
+    SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END)    AS negative_count
+FROM dwh.fact_cashflow
+GROUP BY cashflow_type
+ORDER BY cashflow_type;
+
+
+-- Trade side check
+SELECT
+    side,
+    COUNT(*)                                        AS total_rows,
+    SUM(CASE WHEN amount > 0 THEN 1 ELSE 0 END)    AS positive_amount,
+    SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END)    AS negative_amount
+FROM dwh.fact_trade
+GROUP BY side;
+
+
+-- NULL close prices
+SELECT
+    COUNT(*)                                                AS total_rows,
+    SUM(CASE WHEN close_price IS NULL THEN 1 ELSE 0 END)   AS null_prices,
+    SUM(CASE WHEN close_price IS NOT NULL THEN 1 ELSE 0 END) AS valid_prices
+FROM dwh.fact_security_price;
+
+
+
+-- NULL return pct
+SELECT
+    COUNT(*)                                                AS total_rows,
+    SUM(CASE WHEN return_pct IS NULL THEN 1 ELSE 0 END)    AS null_returns,
+    SUM(CASE WHEN return_pct IS NOT NULL THEN 1 ELSE 0 END) AS valid_returns
+FROM dwh.fact_performance;
+
+
+-- Negative settle lag
+SELECT COUNT(*) AS negative_settle_lag_count
+FROM dwh.fact_trade
+WHERE settle_lag_days < 0;
+
+
+-- Total AUM by currency
+SELECT
+    da.base_currency,
+    COUNT(DISTINCT fh.account_id)       AS total_accounts,
+    SUM(fh.market_value)                AS total_aum,
+    AVG(fh.market_value)                AS avg_holding_value
+FROM dwh.fact_holding fh
+INNER JOIN dwh.dim_account da
+    ON da.account_sk = fh.account_sk
+GROUP BY da.base_currency
+ORDER BY total_aum DESC;
+
+--Altering an older procedure to work better 
+ALTER PROCEDURE dwh.usp_load_fact_trade
+
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_trade;
+
+    INSERT INTO dwh.fact_trade (
+        account_sk,
+        security_sk,
+        trade_date_sk,
+        settle_date_sk,
+        trade_id,
+        account_id,
+        security_id,
+        trade_date,
+        settle_date,
+        side,
+        price,
+        quantity,
+        amount,
+        settle_lag_days
+    )
+    SELECT
+        da.account_sk,
+        ds.security_sk,
+        dd_trade.date_sk,
+        dd_settle.date_sk,
+        src.TradeID,
+        src.AccountID,
+        src.SecurityID,
+        CAST(src.TradeDate  AS DATE),
+        CAST(src.SettleDate AS DATE),
+        src.Side,
+        CAST(src.Price      AS DECIMAL(18,4)),
+        CAST(src.Quantity   AS DECIMAL(18,4)),
+        CAST(src.Amount     AS DECIMAL(18,2)),
+        DATEDIFF(DAY,
+            CAST(src.TradeDate  AS DATE),
+            CAST(src.SettleDate AS DATE))
+    FROM (
+        -- STEP 1: Remove exact duplicate rows first
+        SELECT DISTINCT
+            TradeID, AccountID, SecurityID,
+            TradeDate, SettleDate, Side,
+            Price, Quantity, Amount
+        FROM stg.stg_trades
+    ) all_trades
+    -- STEP 2: For same TradeID with different amounts,
+    --         keep the row where amount matches price x quantity
+    INNER JOIN (
+        SELECT
+            TradeID,
+            MIN(ABS(CAST(Amount AS DECIMAL(18,2)) -
+                ROUND(CAST(Price AS DECIMAL(18,4)) *
+                      CAST(Quantity AS DECIMAL(18,4)), 2)
+            )) AS min_diff
+        FROM (
+            SELECT DISTINCT TradeID, Price, Quantity, Amount
+            FROM stg.stg_trades
+        ) d
+        GROUP BY TradeID
+    ) best ON all_trades.TradeID = best.TradeID
+           AND ABS(CAST(all_trades.Amount AS DECIMAL(18,2)) -
+               ROUND(CAST(all_trades.Price AS DECIMAL(18,4)) *
+                     CAST(all_trades.Quantity AS DECIMAL(18,4)), 2)
+               ) = best.min_diff
+    -- Rename for clarity
+    CROSS APPLY (SELECT all_trades.TradeID, all_trades.AccountID,
+        all_trades.SecurityID, all_trades.TradeDate, all_trades.SettleDate,
+        all_trades.Side, all_trades.Price, all_trades.Quantity,
+        all_trades.Amount) src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_security ds
+        ON ds.security_id = src.SecurityID
+        AND ds.is_active  = 'Y'
+    INNER JOIN dwh.dim_date dd_trade
+        ON dd_trade.full_date = CAST(src.TradeDate AS DATE)
+    INNER JOIN dwh.dim_date dd_settle
+        ON dd_settle.full_date = CAST(src.SettleDate AS DATE);
+
+END;
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+ALTER PROCEDURE dwh.usp_load_fact_trade
+
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    TRUNCATE TABLE dwh.fact_trade;
+
+    INSERT INTO dwh.fact_trade (
+        account_sk,
+        security_sk,
+        trade_date_sk,
+        settle_date_sk,
+        trade_id,
+        account_id,
+        security_id,
+        trade_date,
+        settle_date,
+        side,
+        price,
+        quantity,
+        amount,
+        settle_lag_days
+    )
+    SELECT
+        da.account_sk,
+        ds.security_sk,
+        dd_trade.date_sk,
+        dd_settle.date_sk,
+        src.TradeID,
+        src.AccountID,
+        src.SecurityID,
+        CAST(src.TradeDate  AS DATE),
+        CAST(src.SettleDate AS DATE),
+        src.Side,
+        CAST(src.Price      AS DECIMAL(18,4)),
+        CAST(src.Quantity   AS DECIMAL(18,4)),
+        CAST(src.Amount     AS DECIMAL(18,2)),
+        DATEDIFF(DAY,
+            CAST(src.TradeDate  AS DATE),
+            CAST(src.SettleDate AS DATE))
+    FROM (
+        -- FINAL: One row per TradeID
+        -- For amended trades: keep row closest to price x quantity
+        -- For exact duplicates: keep just one row
+        SELECT
+            TradeID, AccountID, SecurityID,
+            TradeDate, SettleDate, Side,
+            Price, Quantity, Amount
+        FROM (
+            SELECT
+                TradeID, AccountID, SecurityID,
+                TradeDate, SettleDate, Side,
+                Price, Quantity, Amount,
+                ROW_NUMBER() OVER (
+                    PARTITION BY TradeID
+                    ORDER BY
+                        ABS(CAST(Amount AS DECIMAL(18,2)) -
+                            ROUND(CAST(Price AS DECIMAL(18,4)) *
+                                  CAST(Quantity AS DECIMAL(18,4)), 2)
+                        ) ASC
+                ) AS rn
+            FROM (
+                -- Remove fully identical rows first
+                SELECT DISTINCT
+                    TradeID, AccountID, SecurityID,
+                    TradeDate, SettleDate, Side,
+                    Price, Quantity, Amount
+                FROM stg.stg_trades
+            ) deduped
+        ) ranked
+        WHERE rn = 1
+    ) src
+    INNER JOIN dwh.dim_account da
+        ON da.account_id = src.AccountID
+        AND da.is_current = 'Y'
+    INNER JOIN dwh.dim_security ds
+        ON ds.security_id = src.SecurityID
+        AND ds.is_active  = 'Y'
+    INNER JOIN dwh.dim_date dd_trade
+        ON dd_trade.full_date = CAST(src.TradeDate AS DATE)
+    INNER JOIN dwh.dim_date dd_settle
+        ON dd_settle.full_date = CAST(src.SettleDate AS DATE);
+
+END;
+
